@@ -23,7 +23,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const sessionStore = {}; // Store temporary paths for final delivery
 
 // Use an application-specific storage folder instead of raw system tmp
-const APP_STORAGE = path.join(__dirname, 'storage');
+const APP_STORAGE = process.env.VERCEL
+    ? path.join(os.tmpdir(), 'songvault-storage')
+    : path.join(__dirname, 'storage');
 if (!fs.existsSync(APP_STORAGE)) fs.mkdirSync(APP_STORAGE, { recursive: true });
 
 // Persist completed downloads metadata to disk
@@ -707,10 +709,14 @@ app.post('/api/clear-completed', (req, res) => {
     res.json({ ok: true });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`\n======================================`);
-    console.log(`🎵 SongVault Backend Server is RUNNING!`);
-    console.log(`🚀 http://localhost:${PORT}`);
-    console.log(`======================================\n`);
-});
+if (require.main === module) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+        console.log(`\n======================================`);
+        console.log(`🎵 SongVault Backend Server is RUNNING!`);
+        console.log(`🚀 http://localhost:${PORT}`);
+        console.log(`======================================\n`);
+    });
+}
+
+module.exports = app;
