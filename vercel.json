@@ -2,11 +2,18 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": [
+        "index.html",
+        "index.css",
+        "app.js"
+      ]
     }
   },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/index.css", "destination": "/api?asset=index.css" },
+    { "source": "/app.js", "destination": "/api?asset=app.js" },
     { "source": "/", "destination": "/api" }
   ]
 }

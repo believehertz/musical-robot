@@ -92,7 +92,20 @@ app.use('/api', (req, res, next) => {
     next();
 });
 app.use(express.static(path.join(__dirname))); // Serve static files
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/', (req, res) => {
+    const asset = req.query.asset;
+    const allowedAssets = {
+        'index.html': ['text/html; charset=UTF-8', 'index.html'],
+        'index.css': ['text/css; charset=UTF-8', 'index.css'],
+        'app.js': ['application/javascript; charset=UTF-8', 'app.js'],
+    };
+    if (asset && allowedAssets[asset]) {
+        const [contentType, filename] = allowedAssets[asset];
+        res.type(contentType).sendFile(path.join(__dirname, filename));
+        return;
+    }
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 function isSafeRemoteUrl(rawUrl) {
     if (!rawUrl) return false;
