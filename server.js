@@ -83,6 +83,7 @@ app.use('/api/', apiLimiter);
 app.use(express.json({ limit: '2mb' }));
 app.use('/api', (req, res, next) => {
     if (req.path === '/health') return next();
+    if (['index.html', 'index.css', 'app.js'].includes(req.query.asset)) return next();
     const authHeader = req.headers.authorization || '';
     const expected = `Bearer ${API_TOKEN}`;
     const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
