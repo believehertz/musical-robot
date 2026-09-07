@@ -92,6 +92,7 @@ app.use('/api', (req, res, next) => {
     next();
 });
 app.use(express.static(path.join(__dirname))); // Serve static files
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 function isSafeRemoteUrl(rawUrl) {
     if (!rawUrl) return false;
