@@ -1,0 +1,10 @@
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.env
+storage/*.mp3
+storage/*.part
+storage/*.tmp
+storage/*.log
+storage/completed.json

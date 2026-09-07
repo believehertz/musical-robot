@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SongVault — Find any song. Download it instantly.</title>
+  <meta name="description" content="SongVault helps you find and download any song from the internet and YouTube. Search by title, artist, or paste a Spotify URL." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+  <!-- Ambient background blobs -->
+  <div class="ambient-bg">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <div class="app-container">
+    <!-- ─── HEADER ─── -->
+    <header id="app-header" class="header">
+      <div class="logo-group">
+        <div class="logo-icon">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+            <rect width="36" height="36" rx="10" fill="url(#logoGrad)" />
+            <path d="M24 12V22.5C24 24.433 22.433 26 20.5 26C18.567 26 17 24.433 17 22.5C17 20.567 18.567 19 20.5 19C21.163 19 21.782 19.186 22.316 19.5L22 12H24ZM14 14V24.5C14 26.433 12.433 28 10.5 28C8.567 28 7 26.433 7 24.5C7 22.567 8.567 21 10.5 21C11.163 21 11.782 21.186 12.316 21.5L12 14H14Z" fill="white" opacity="0.95"/>
+            <defs>
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="36" y2="36">
+                <stop stop-color="#7C3AED" />
+                <stop offset="1" stop-color="#22D3EE" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <h1 class="logo-text">SongVault</h1>
+          <p class="tagline">Find any song. Download it instantly.</p>
+        </div>
+      </div>
+      <div class="header-badge">
+        <span class="status-dot"></span>
+        <span>Engine Online</span>
+      </div>
+    </header>
+
+    <!-- ─── MODE TABS ─── -->
+    <div id="mode-tabs" class="tab-bar" data-active="url">
+      <button id="tab-url" class="tab active" data-mode="url" aria-pressed="true">
+        <span class="tab-icon">🔗</span>
+        <span>Paste URL</span>
+      </button>
+      <button id="tab-search" class="tab" data-mode="search" aria-pressed="false">
+        <span class="tab-icon">🔍</span>
+        <span>Search Song</span>
+      </button>
+      <button id="tab-identify" class="tab" data-mode="identify" aria-pressed="false">
+        <span class="tab-icon">🎵</span>
+        <span>Identify Song</span>
+      </button>
+      <div class="tab-indicator"></div>
+    </div>
+
+    <!-- ─── INPUT AREA ─── -->
+    <section id="input-section" class="input-section">
+      <!-- URL mode input -->
+      <div id="input-url" class="input-wrapper active">
+        <div class="input-glow-wrap">
+          <input
+            id="url-input"
+            type="url"
+            class="main-input"
+            placeholder="Paste a Spotify song or playlist URL…"
+            autocomplete="off"
+          />
+        </div>
+        <button id="btn-find-url" class="btn-primary">
+          <span class="btn-label">Find &amp; Download</span>
+          <span class="btn-spinner"></span>
+        </button>
+      </div>
+
+      <!-- Search mode input -->
+      <div id="input-search" class="input-wrapper">
+        <div class="input-glow-wrap">
+          <input
+            id="search-input"
+            type="text"
+            class="main-input"
+            placeholder="Search by song title or artist name…"
+            autocomplete="off"
+          />
+        </div>
+        <button id="btn-find-search" class="btn-primary">
+          <span class="btn-label">Search</span>
+          <span class="btn-spinner"></span>
+        </button>
+      </div>
+
+      <!-- Identify Song mode -->
+      <div id="input-identify" class="input-wrapper identify-wrapper">
+        <div class="identify-card">
+          <p class="identify-hint" id="identify-hint">Tap the mic and hold your phone near the song</p>
+
+          <!-- Mic button with ripple rings -->
+          <div class="mic-container">
+            <div class="mic-ring ring-1" id="ring-1"></div>
+            <div class="mic-ring ring-2" id="ring-2"></div>
+            <div class="mic-ring ring-3" id="ring-3"></div>
+            <button class="btn-mic" id="btn-mic" title="Tap to listen" aria-label="Identify song by listening">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="32" height="32">
+                <rect x="9" y="2" width="6" height="11" rx="3"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="8" y1="22" x2="16" y2="22"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Countdown timer -->
+          <div class="identify-timer hidden" id="identify-timer">
+            <div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar"></div></div>
+            <span id="timer-label">10s</span>
+          </div>
+
+          <!-- Equalizer bars shown while listening -->
+          <div class="equalizer hidden" id="equalizer">
+            <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+            <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+          </div>
+
+          <!-- Result card shown after identification -->
+          <div class="identify-result hidden" id="identify-result">
+            <img class="identify-art" id="identify-art" src="" alt="Album art" />
+            <div class="identify-info">
+              <div class="identify-song-title" id="identify-song-title"></div>
+              <div class="identify-song-artist" id="identify-song-artist"></div>
+              <div class="identify-song-album" id="identify-song-album"></div>
+            </div>
+            <div class="identify-actions">
+              <button class="btn-primary" id="btn-identify-download" style="padding:10px 18px;font-size:.85rem;">
+                <span class="btn-label">⬇ Download</span>
+                <span class="btn-spinner"></span>
+              </button>
+              <button class="btn-secondary" id="btn-identify-search">🔍 Find Similar</button>
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <div class="identify-error hidden" id="identify-error">
+            <span id="identify-error-msg"></span>
+            <button class="btn-secondary" id="btn-retry-identify" style="margin-top:12px;">↩ Try Again</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── RESULTS ─── -->
+    <section id="results-section" class="results-section hidden">
+      <div class="results-header">
+        <h2 id="results-title" class="section-title" role="status" aria-live="polite">Results</h2>
+        <div id="select-all-container" class="hidden">
+          <label class="select-all-label">
+            <input type="checkbox" id="check-select-all" class="card-checkbox" />
+            <span>Select all on this page</span>
+          </label>
+        </div>
+      </div>
+      <!-- skeleton cards while loading -->
+      <div id="skeleton-list" class="card-list hidden">
+        <div class="song-card skeleton"><div class="sk-thumb"></div><div class="sk-lines"><div class="sk-line w70"></div><div class="sk-line w40"></div></div></div>
+        <div class="song-card skeleton"><div class="sk-thumb"></div><div class="sk-lines"><div class="sk-line w70"></div><div class="sk-line w40"></div></div></div>
+        <div class="song-card skeleton"><div class="sk-thumb"></div><div class="sk-lines"><div class="sk-line w70"></div><div class="sk-line w40"></div></div></div>
+        <div class="song-card skeleton"><div class="sk-thumb"></div><div class="sk-lines"><div class="sk-line w70"></div><div class="sk-line w40"></div></div></div>
+        <div class="song-card skeleton"><div class="sk-thumb"></div><div class="sk-lines"><div class="sk-line w70"></div><div class="sk-line w40"></div></div></div>
+      </div>
+      <!-- actual results -->
+      <div id="results-list" class="card-list"></div>
+
+      <!-- pagination controls -->
+      <div id="pagination-controls" class="pagination hidden">
+        <button id="btn-prev-page" class="btn-page-nav">← Previous</button>
+        <div id="pagination-numbers" class="page-numbers"></div>
+        <button id="btn-next-page" class="btn-page-nav">Next →</button>
+      </div>
+    </section>
+
+    <!-- ─── DOWNLOAD QUEUE ─── -->
+    <section id="queue-section" class="queue-section hidden">
+      <h2 class="section-title">Download Queue</h2>
+      <div id="queue-list" class="queue-list"></div>
+    </section>
+
+    <!-- ─── COMPLETED DOWNLOADS ─── -->
+    <section id="completed-section" class="completed-section hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <h2 class="section-title completed-title" style="margin:0;">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="#22D3EE"><path d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm-1 15l-5-5 1.41-1.41L9 12.17l6.59-6.59L17 7l-8 8z"/></svg>
+        Downloaded
+        </h2>
+        <div>
+          <button id="btn-clear-completed" class="btn-secondary" style="margin-left:8px;padding:8px 12px;font-size:.85rem;">Clear History</button>
+        </div>
+      </div>
+      <div id="completed-list" class="completed-list"></div>
+    </section>
+
+    <footer class="footer">
+      <p>&copy; 2026 SongVault &middot; Built for music lovers</p>
+    </footer>
+  </div>
+
+  <!-- ─── FLOATING SELECTION BAR ─── -->
+  <div id="floating-selection-bar" class="floating-bar hidden">
+    <div class="floating-bar-content">
+      <span id="floating-selected-count">0 songs selected</span>
+      <div class="floating-bar-actions">
+        <button id="btn-floating-download" class="btn-primary" style="padding: 10px 20px;">Download All</button>
+        <button id="btn-floating-clear" class="btn-secondary">Clear Selection</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
