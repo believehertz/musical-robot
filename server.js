@@ -16,8 +16,10 @@ const FormData = require('form-data');
 const { SCRAPER_PIPELINE, runScraperPipeline } = require('./scrapers.js');
 const youtubeDlExec = require('youtube-dl-exec');
 const ytdlpPath = path.join(__dirname, '.venv', 'Scripts', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
-const youtubedl = fs.existsSync(ytdlpPath) ? youtubeDlExec.create(ytdlpPath) : youtubeDlExec;
-console.log(`Using yt-dlp executable: ${fs.existsSync(ytdlpPath) ? ytdlpPath : youtubeDlExec.constants.YOUTUBE_DL_PATH}`);
+const localYtdlpAvailable = fs.existsSync(ytdlpPath);
+const configuredYtdlpPath = localYtdlpAvailable ? ytdlpPath : youtubeDlExec.constants.YOUTUBE_DL_PATH;
+const youtubedl = localYtdlpAvailable ? youtubeDlExec.create(ytdlpPath) : youtubeDlExec;
+console.log(`Using yt-dlp executable: ${configuredYtdlpPath}`);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // memory storage for audio
 const sessionStore = {}; // Store temporary paths for final delivery
@@ -315,9 +317,7 @@ app.get('/api/download-progress', async (req, res) => {
                     ];
                     if (sourceUsed === 'YouTube') ytdlpArgs.unshift('--match-filter', 'duration < 600');
 
-                    const executable = fs.existsSync(ytdlpPath)
-                        ? ytdlpPath
-                        : youtubeDlExec.constants.YOUTUBE_DL_PATH;
+                    const executable = configuredYtdlpPath;
                     await new Promise((resolve, reject) => {
                         const child = require('child_process').spawn(executable, ytdlpArgs, {
                             windowsHide: true,

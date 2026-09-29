@@ -1,5 +1,9 @@
 {
   "version": 2,
+  "env": {
+    "YOUTUBE_DL_FILENAME": "yt-dlp_linux"
+  },
+  "buildCommand": "npm rebuild youtube-dl-exec",
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
