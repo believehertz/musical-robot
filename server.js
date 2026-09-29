@@ -305,10 +305,8 @@ app.get('/api/download-progress', async (req, res) => {
                     };
                     if (sourceUsed === 'YouTube') ytdlOpts.matchFilter = 'duration < 600';
 
-                    const ytdlpArgs = [
-                        downloadUrl,
-                        '--extractor-args', 'youtube:player_client=android,web_safari',
-                        '--format', 'bestaudio/best',
+                            const ytdlpArgs = [
+                                downloadUrl,
                         '--extract-audio',
                         '--audio-format', 'mp3',
                         '--audio-quality', '0',
@@ -317,7 +315,15 @@ app.get('/api/download-progress', async (req, res) => {
                         '--ffmpeg-location', ffmpegPath,
                         '--no-warnings',
                     ];
-                    if (sourceUsed === 'YouTube') ytdlpArgs.unshift('--match-filter', 'duration < 600');
+                    if (sourceUsed === 'YouTube') {
+                        const youtubeClients = ['android,web_safari', 'android', 'web'];
+                        const client = youtubeClients[attempt - 1] || youtubeClients[0];
+                        ytdlpArgs.splice(1, 0,
+                            '--extractor-args', `youtube:player_client=${client}`,
+                            '--format', 'bestaudio/best'
+                        );
+                        ytdlpArgs.unshift('--match-filter', 'duration < 600');
+                    }
 
                     const executable = configuredYtdlpPath;
                     await new Promise((resolve, reject) => {
