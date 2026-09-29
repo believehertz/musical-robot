@@ -158,7 +158,7 @@ async function downloadImage(url) {
 
 // 2. SSE Download Progress endpoint
 app.get('/api/download-progress', async (req, res) => {
-    const { title, artist, album, year, genre, trackNumber, trackCount, cover, id } = req.query;
+    const { title, artist, album, year, genre, trackNumber, trackCount, cover, sourceUrl, id } = req.query;
     if (!title || !id) return res.status(400).json({ error: 'Title and ID are required' });
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -173,23 +173,32 @@ app.get('/api/download-progress', async (req, res) => {
     let downloadUrl = null;
     let sourceUsed = '';
 
-    // Step 1: Run all scrapers IN PARALLEL — resolves at the speed of the fastest winner
-    sendMsg('Scanning music sources...');
-    const scraperResult = await runScraperPipeline(
-        artist || '',
-        title,
-        (scraperName) => console.log(`   Trying ${scraperName}...`)
-    );
-
-    if (scraperResult.url) {
-        downloadUrl = scraperResult.url;
-        sourceUsed  = scraperResult.source;
-        sendMsg(`Found on ${sourceUsed}!`);
+    // Use an explicitly selected YouTube result when available; otherwise run
+    // the broader scraper pipeline for catalog and direct-download sources.
+    const selectedUrl = typeof sourceUrl === 'string' ? sourceUrl : '';
+    const isSelectedYouTube = /^https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\//i.test(selectedUrl);
+    if (isSelectedYouTube) {
+        downloadUrl = selectedUrl;
+        sourceUsed = 'YouTube';
+        sendMsg('Using selected YouTube result...');
     } else {
-        sendMsg('Falling back to YouTube...');
-        console.log('   All scrapers failed. Falling back to YouTube...');
-        downloadUrl = `ytsearch1:${artist} ${title} official audio`;
-        sourceUsed  = 'YouTube';
+        sendMsg('Scanning music sources...');
+        const scraperResult = await runScraperPipeline(
+            artist || '',
+            title,
+            (scraperName) => console.log(`   Trying ${scraperName}...`)
+        );
+
+        if (scraperResult.url) {
+            downloadUrl = scraperResult.url;
+            sourceUsed  = scraperResult.source;
+            sendMsg(`Found on ${sourceUsed}!`);
+        } else {
+            sendMsg('Falling back to YouTube...');
+            console.log('   All scrapers failed. Falling back to YouTube...');
+            downloadUrl = `ytsearch1:${artist} ${title} official audio`;
+            sourceUsed = 'YouTube';
+        }
     }
 
     sendMsg('Processing audio...');
@@ -445,8 +454,8 @@ app.get('/api/serve-file', (req, res) => {
     });
 });
 
-// ─── Search: iTunes + MusicBrainz in parallel ────────────────────────────────
-// Runs both APIs simultaneously and returns a merged, deduplicated result set.
+// ─── Search: iTunes + MusicBrainz + YouTube ──────────────────────────────────
+// Runs all sources simultaneously and returns a merged, deduplicated result set.
 // Either source can fail independently without breaking the whole search.
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/api/search', async (req, res) => {
@@ -534,14 +543,52 @@ app.get('/api/search', async (req, res) => {
         });
     }
 
+    // ── YouTube ───────────────────────────────────────────────
+    // yt-dlp supplies public search metadata without requiring a YouTube API key.
+    async function fetchYouTube() {
+        const searchLimit = Math.min(Number(limit) || 10, 10);
+        const output = await Promise.race([
+            youtubedl(`ytsearch${searchLimit}:${query.trim().replace(/\s+/g, '+')}`, {
+                dumpSingleJson: true,
+                flatPlaylist: true,
+                skipDownload: true,
+                noWarnings: true,
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('YouTube search timed out')), 20000)),
+        ]);
+
+        const entries = Array.isArray(output?.entries) ? output.entries : [];
+        return entries
+            .filter(item => item?.id && item?.title)
+            .map(item => ({
+                _source: 'youtube',
+                trackId: `yt-${item.id}`,
+                trackName: item.title,
+                artistName: item.channel || item.uploader || 'YouTube',
+                collectionName: 'YouTube',
+                trackTimeMillis: item.duration ? Math.round(item.duration * 1000) : 0,
+                artworkUrl100: item.thumbnails?.at(-1)?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+                artworkUrl60: item.thumbnails?.[0]?.url || '',
+                releaseDate: item.upload_date || '',
+                primaryGenreName: 'YouTube',
+                sourceUrl: item.webpage_url || `https://www.youtube.com/watch?v=${item.id}`,
+            }));
+    }
+
     // ── Run in parallel ───────────────────────────────────────
-    const [itunesResult, mbResult] = await Promise.allSettled([fetchItunes(), fetchMusicBrainz()]);
+    const [itunesResult, mbResult, youtubeResult] = await Promise.allSettled([
+        fetchItunes(),
+        fetchMusicBrainz(),
+        fetchYouTube(),
+    ]);
 
     const itunesTracks = itunesResult.status === 'fulfilled' ? itunesResult.value : [];
     const mbTracks     = mbResult.status     === 'fulfilled' ? mbResult.value     : [];
+    const youtubeTracks = youtubeResult.status === 'fulfilled' ? youtubeResult.value : [];
 
     if (itunesResult.status === 'rejected') console.error('iTunes failed:', itunesResult.reason?.message);
     if (mbResult.status     === 'rejected') console.error('MusicBrainz failed:', mbResult.reason?.message);
+    if (youtubeResult.status === 'rejected') console.error('YouTube search failed:', youtubeResult.reason?.message);
 
     // ── Deduplicate ───────────────────────────────────────────
     // Normalise a string for fuzzy comparison
@@ -565,10 +612,21 @@ app.get('/api/search', async (req, res) => {
         return true;
     });
 
-    // iTunes results first (better metadata/artwork), then unique MB results
-    const merged = [...itunesTracks, ...uniqueMbTracks];
+    const uniqueYoutubeTracks = youtubeTracks.filter(t => {
+        const key = `${norm(t.trackName)}|${norm(t.artistName)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 
-    res.json({ results: merged, _meta: { itunes: itunesTracks.length, musicbrainz: uniqueMbTracks.length } });
+    // Catalog results first, then unique MusicBrainz and YouTube results.
+    const merged = [...itunesTracks, ...uniqueMbTracks, ...uniqueYoutubeTracks];
+
+    res.json({ results: merged, _meta: {
+        itunes: itunesTracks.length,
+        musicbrainz: uniqueMbTracks.length,
+        youtube: uniqueYoutubeTracks.length,
+    } });
 });
 
 // Proxy for AudD API recognition

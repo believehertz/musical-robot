@@ -139,7 +139,7 @@
   }
 
   // ═══════════════════════════════════════════
-  //  SEARCH API  (iTunes + MusicBrainz)
+  //  SEARCH API  (iTunes + MusicBrainz + YouTube)
   // ═══════════════════════════════════════════
 
   /**
@@ -155,7 +155,7 @@
       const data = await res.json();
       const tracks = normalizeItunesResults(data.results || []);
       // Log source breakdown to console for debugging
-      if (data._meta) console.log(`Search: ${data._meta.itunes} iTunes + ${data._meta.musicbrainz} MusicBrainz results`);
+      if (data._meta) console.log(`Search: ${data._meta.itunes} iTunes + ${data._meta.musicbrainz} MusicBrainz + ${data._meta.youtube || 0} YouTube results`);
       return tracks;
     } catch (err) {
       console.error('Search fetch failed:', err);
@@ -203,7 +203,8 @@
         trackCount:   r.trackCount       || '',
         discNumber:   r.discNumber       || '',
         source:       'Full Audio',
-        _searchSource: r._source || 'itunes', // 'itunes' | 'musicbrainz'
+        sourceUrl:     r.sourceUrl || '',
+        _searchSource: r._source || 'itunes', // 'itunes' | 'musicbrainz' | 'youtube'
       };
     });
   }
@@ -601,6 +602,8 @@
       ? '<span class="badge badge-official">Queued</span>'
       : song._searchSource === 'musicbrainz'
         ? '<span class="badge badge-mb">MusicBrainz</span>'
+        : song._searchSource === 'youtube'
+          ? '<span class="badge badge-yt">YouTube</span>'
         : '<span class="badge badge-official">HQ Audio</span>';
     const badgeHTML = sourceBadge;
 
@@ -901,7 +904,8 @@
       + `&genre=${encodeURIComponent(song.genre || '')}`
       + `&trackNumber=${encodeURIComponent(song.trackNumber || '')}`
       + `&trackCount=${encodeURIComponent(song.trackCount || '')}`
-      + `&cover=${encodeURIComponent(song.artworkUrl || '')}`;
+      + `&cover=${encodeURIComponent(song.artworkUrl || '')}`
+      + `&sourceUrl=${encodeURIComponent(song.sourceUrl || '')}`;
 
     const sse = new EventSource(endpoint);
 
