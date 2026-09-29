@@ -92,7 +92,7 @@ app.use('/api', (req, res, next) => {
     }
     next();
 });
-app.use(express.static(path.join(__dirname))); // Serve static files
+app.use(express.static(path.join(__dirname), { index: false })); // Serve static assets; the route below renders the homepage
 app.get('/', (req, res) => {
     const asset = req.query.asset;
     const allowedAssets = {
