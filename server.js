@@ -110,8 +110,8 @@ app.get('/', (req, res) => {
         const css = fs.readFileSync(path.join(__dirname, 'index.css'), 'utf8');
         const javascript = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
         html = html
-            .replace('<link rel="stylesheet" href="/index.css" />', `<style>${css}</style>`)
-            .replace('<script src="/app.js"></script>', `<script>${javascript}</script>`);
+            .replace(/<link\s+rel="stylesheet"\s+href="\/?index\.css"\s*\/?>/i, `<style>${css}</style>`)
+            .replace(/<script\s+src="\/?app\.js"><\/script>/i, `<script>${javascript}</script>`);
     }
     res.type('html').send(html);
 });
