@@ -276,7 +276,6 @@ async function ytdlpSearch(query, label) {
         const output = await ytdlp(query, {
             dumpJson: true,
             noWarnings: true,
-            noCallHome: true,
             skipDownload: true,
         });
         if (!output) return null;
@@ -304,7 +303,7 @@ async function scrapeBoomplay(artist, title) {
     try {
         const searchUrl = `https://www.boomplay.com/search/default/${encodeURIComponent(artist + ' ' + title)}`;
         const output = await ytdlp(searchUrl, {
-            dumpJson: true, noWarnings: true, noCallHome: true,
+            dumpJson: true, noWarnings: true,
             skipDownload: true, playlistItems: '1',
         });
         if (!output) return null;
@@ -319,7 +318,7 @@ async function scrapeMdundo(artist, title) {
     try {
         const searchUrl = `https://mdundo.com/search?q=${encodeURIComponent(artist + ' ' + title)}`;
         const output = await ytdlp(searchUrl, {
-            dumpJson: true, noWarnings: true, noCallHome: true,
+            dumpJson: true, noWarnings: true,
             skipDownload: true, playlistItems: '1',
         });
         if (!output) return null;

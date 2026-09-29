@@ -300,7 +300,6 @@ app.get('/api/download-progress', async (req, res) => {
                         ffmpegLocation: ffmpegPath,
                         noWarnings: true,
                         preferFreeFormats: true,
-                        noCallHome: true,
                     };
                     if (sourceUsed === 'YouTube') ytdlOpts.matchFilter = 'duration < 600';
 
@@ -313,7 +312,6 @@ app.get('/api/download-progress', async (req, res) => {
                         '-o', outTemplate,
                         '--ffmpeg-location', ffmpegPath,
                         '--no-warnings',
-                        '--no-call-home',
                     ];
                     if (sourceUsed === 'YouTube') ytdlpArgs.unshift('--match-filter', 'duration < 600');
 
