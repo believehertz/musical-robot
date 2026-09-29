@@ -307,6 +307,8 @@ app.get('/api/download-progress', async (req, res) => {
 
                     const ytdlpArgs = [
                         downloadUrl,
+                        '--extractor-args', 'youtube:player_client=android,web_safari',
+                        '--format', 'bestaudio/best',
                         '--extract-audio',
                         '--audio-format', 'mp3',
                         '--audio-quality', '0',
@@ -551,6 +553,7 @@ app.get('/api/search', async (req, res) => {
                 flatPlaylist: true,
                 skipDownload: true,
                 noWarnings: true,
+                extractorArgs: 'youtube:player_client=android,web_safari',
             }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('YouTube search timed out')), 20000)),
         ]);
