@@ -271,17 +271,21 @@ async function scrapeFakaza(artist, title) {
 //  yt-dlp PLATFORM SCRAPERS
 // ─────────────────────────────────────────────────────────────
 
-async function ytdlpSearch(query, label) {
+// YouTube searches use --flat-playlist: we only need the video URL, so yt-dlp
+// never touches the player API (where the "confirm you're not a bot" gate lives).
+// The real extraction happens later in server.js with cookies / PO tokens.
+async function ytdlpSearch(query, label, { flat = false } = {}) {
     try {
-        const output = await ytdlp(query, {
-            dumpJson: true,
-            noWarnings: true,
-            skipDownload: true,
-        });
+        const output = await ytdlp(query, flat
+            ? { dumpSingleJson: true, flatPlaylist: true, skipDownload: true, noWarnings: true, forceIpv4: true }
+            : { dumpJson: true, noWarnings: true, skipDownload: true });
         if (!output) return null;
-        const item = Array.isArray(output) ? output[0] : output;
+        const item = flat
+            ? (Array.isArray(output.entries) ? output.entries[0] : null)
+            : (Array.isArray(output) ? output[0] : output);
         if (!item) return null;
-        const url = item.webpage_url || item.url;
+        let url = item.webpage_url || item.url;
+        if (!url && flat && item.id) url = `https://www.youtube.com/watch?v=${item.id}`;
         if (url) { console.log(`   [${label}] Found: ${url}`); return url; }
         return null;
     } catch (e) { return null; }
@@ -296,7 +300,7 @@ async function scrapeSoundCloud(artist, title) {
 }
 
 async function scrapeYouTubeMusic(artist, title) {
-    return ytdlpSearch(`ytsearch1:${artist} ${title} official audio`, 'YouTube Music');
+    return ytdlpSearch(`ytsearch1:${artist} ${title} official audio`, 'YouTube Music', { flat: true });
 }
 
 async function scrapeBoomplay(artist, title) {

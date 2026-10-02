@@ -1,3 +1,4 @@
+const { buildYtdlpArgs, prepareCookies, cookiesAvailable, jsRuntime, isYouTubeUrl, COOKIES_PATH } = require('./ytdlp-config'); // loads .env first
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -20,6 +21,8 @@ const localYtdlpAvailable = fs.existsSync(ytdlpPath);
 const configuredYtdlpPath = localYtdlpAvailable ? ytdlpPath : youtubeDlExec.constants.YOUTUBE_DL_PATH;
 const youtubedl = localYtdlpAvailable ? youtubeDlExec.create(ytdlpPath) : youtubeDlExec;
 console.log(`Using yt-dlp executable: ${configuredYtdlpPath}`);
+console.log(`Cookies: ${cookiesAvailable() ? COOKIES_PATH : '(none - YouTube may bot-gate)'}`);
+console.log(`JS runtime: ${jsRuntime() || '(none - install Deno: winget install DenoLand.Deno)'}`);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // memory storage for audio
 const sessionStore = {}; // Store temporary paths for final delivery
@@ -158,6 +161,21 @@ async function downloadImage(url) {
     }
 }
 
+// Turn raw yt-dlp / network errors into something safe to show in the UI.
+function friendlyDownloadError(message = '') {
+    if (/sign in to confirm|not a bot/i.test(message)) {
+        return 'YouTube blocked this request (bot check). Refresh cookies.txt, update yt-dlp, and make sure Deno is installed. See the server console.';
+    }
+    if (/HTTP Error 403|Forbidden/i.test(message)) {
+        return 'The source refused the download (403). Try another result.';
+    }
+    if (/Requested format is not available/i.test(message)) {
+        return 'No downloadable audio format was found. Update yt-dlp and try again.';
+    }
+    const lastLine = String(message).split('\n').map(l => l.trim()).filter(Boolean).pop() || 'Download failed';
+    return lastLine.slice(0, 300);
+}
+
 // 2. SSE Download Progress endpoint
 app.get('/api/download-progress', async (req, res) => {
     const { title, artist, album, year, genre, trackNumber, trackCount, cover, sourceUrl, id } = req.query;
@@ -211,11 +229,11 @@ app.get('/api/download-progress', async (req, res) => {
     // Only validate safety for real HTTP(S) URLs. Skip validation for
     // ytsearch/yt-dlp pseudo-specifiers (e.g. 'ytsearch1:...').
     const isDirectMp3Guess = !!(downloadUrl && downloadUrl.match(/^https?:\/\//i));
-    if (isDirectMp3Guess && !isSafeRemoteUrl(downloadUrl)) {
-        throw new Error('Unsafe media source URL');
-    }
-
     try {
+        if (isDirectMp3Guess && !isSafeRemoteUrl(downloadUrl)) {
+            throw new Error('Unsafe media source URL');
+        }
+
         // Determine whether this is a direct MP3 link (fast) or needs yt-dlp
         const isDirectMp3 = !!downloadUrl.match(/^https?:\/\/[^\s]+\.mp3(\?.*)?$/i);
 
@@ -270,69 +288,46 @@ app.get('/api/download-progress', async (req, res) => {
             if (lastErr) throw lastErr;
 
         } else {
-            // Use spawn with args to avoid shell interpolation vulnerabilities
+            // ─── yt-dlp path (YouTube or platform extractor) ──────────────
             const outTemplate = partMp3Path.replace('.part', '') + '.%(ext)s';
-            const args = [
-                downloadUrl,
-                '--extract-audio',
-                '--audio-format', 'mp3',
-                '--audio-quality', '0',
-                '--no-playlist',
-                '-o', outTemplate,
-                '--ffmpeg-location', ffmpegPath,
-            ];
-            if (sourceUsed === 'YouTube') {
-                args.splice(0, 0, '--match-filter', 'duration < 600');
-            }
+            const producedPrefix = path.basename(partMp3Path.replace('.part', ''));
+            // Decide by URL, not by scraper name: the "YouTube Music" scraper
+            // also returns youtube.com links and needs the same cookies/clients.
+            const isYouTube = isYouTubeUrl(downloadUrl);
 
-            console.log(`2. Running yt-dlp with args: ${args.join(' ')}`);
-
-            // Try youtubedl a few times in case of transient failures
             const maxYtAttempts = 3;
             let ytLastErr = null;
-            for (let attempt = 1; attempt <= maxYtAttempts; attempt++) {
-                try {
-                    // Use the bundled youtube-dl-exec so a system yt-dlp binary is not required
-                    const ytdlOpts = {
-                        output: outTemplate,
-                        extractAudio: true,
-                        audioFormat: 'mp3',
-                        audioQuality: '0',
-                        noPlaylist: true,
-                        ffmpegLocation: ffmpegPath,
-                        noWarnings: true,
-                        preferFreeFormats: true,
-                    };
-                    if (sourceUsed === 'YouTube') ytdlOpts.matchFilter = 'duration < 600';
 
-                            const ytdlpArgs = [
-                                downloadUrl,
+            for (let attempt = 1; attempt <= maxYtAttempts; attempt++) {
+                // Each attempt gets its own cookie copy so parallel downloads
+                // cannot overwrite each other's cookie jar.
+                const cookieCopy = isYouTube ? prepareCookies(`${id}-${attempt}`) : null;
+                try {
+                    const ytdlpArgs = [
+                        ...buildYtdlpArgs({
+                            ffmpegLocation: ffmpegPath,
+                            forYouTube: isYouTube,
+                            attempt,
+                            cookiesPath: cookieCopy ? cookieCopy.path : undefined,
+                        }),
                         '--extract-audio',
                         '--audio-format', 'mp3',
                         '--audio-quality', '0',
-                        '--no-playlist',
                         '-o', outTemplate,
-                        '--ffmpeg-location', ffmpegPath,
-                        '--no-warnings',
                     ];
-                    if (sourceUsed === 'YouTube') {
-                        const youtubeClients = ['android,web_safari', 'android', 'web'];
-                        const client = youtubeClients[attempt - 1] || youtubeClients[0];
-                        ytdlpArgs.splice(1, 0,
-                            '--extractor-args', `youtube:player_client=${client}`,
-                            '--format', 'bestaudio/best'
-                        );
-                        ytdlpArgs.unshift('--match-filter', 'duration < 600');
-                    }
+                    if (isYouTube) ytdlpArgs.push('--format', 'bestaudio/best', '--match-filter', 'duration < 600');
+                    ytdlpArgs.push(downloadUrl);
 
-                    const executable = configuredYtdlpPath;
+                    console.log(`2. yt-dlp attempt ${attempt}/${maxYtAttempts}: ${ytdlpArgs.join(' ')}`);
+
                     await new Promise((resolve, reject) => {
-                        const child = require('child_process').spawn(executable, ytdlpArgs, {
+                        const child = require('child_process').spawn(configuredYtdlpPath, ytdlpArgs, {
                             windowsHide: true,
                             shell: false,
                             stdio: ['ignore', 'pipe', 'pipe'],
                         });
                         let stderr = '';
+                        child.stdout.on('data', () => {}); // drain so the pipe never fills up and stalls yt-dlp
                         child.stderr.on('data', chunk => { stderr += chunk.toString(); });
                         child.on('error', reject);
                         child.on('close', code => {
@@ -341,10 +336,13 @@ app.get('/api/download-progress', async (req, res) => {
                         });
                     });
 
-                    // Find the produced file
-                    const producedPrefix = partMp3Path.replace('.part', '');
-                    const producedCandidates = fs.readdirSync(APP_STORAGE).filter(f => f.startsWith(path.basename(producedPrefix)) && f.toLowerCase().endsWith('.mp3'));
-                    if (producedCandidates.length === 0) throw new Error('youtubedl did not produce an mp3 file');
+                    const producedCandidates = fs.readdirSync(APP_STORAGE)
+                        .filter(f => f.startsWith(producedPrefix) && f.toLowerCase().endsWith('.mp3'));
+                    if (producedCandidates.length === 0) {
+                        const e = new Error('yt-dlp finished but produced no file (the video may be longer than 10 minutes).');
+                        e.noRetry = true; // retrying will not change the outcome
+                        throw e;
+                    }
                     const producedPath = path.join(APP_STORAGE, producedCandidates[0]);
                     try { fs.renameSync(producedPath, finalMp3Path); } catch (e) {
                         fs.copyFileSync(producedPath, finalMp3Path);
@@ -355,7 +353,7 @@ app.get('/api/download-progress', async (req, res) => {
                     break;
                 } catch (err) {
                     ytLastErr = err;
-                    console.error(`youtubedl attempt ${attempt} failed:`, err && err.stack ? err.stack : (err.message || err));
+                    console.error(`yt-dlp attempt ${attempt} failed:`, err && err.stack ? err.stack : (err.message || err));
                     // write debug file for post-mortem
                     try {
                         const dbgPath = path.join(APP_STORAGE, `ytdl-error-${id}.log`);
@@ -363,14 +361,16 @@ app.get('/api/download-progress', async (req, res) => {
                     } catch (e) { console.error('Could not write debug log:', e.message); }
                     // cleanup any partial outputs matching our prefix
                     try {
-                        const prefix = partMp3Path.replace('.part','');
                         fs.readdirSync(APP_STORAGE).forEach(f => {
-                            if (f.startsWith(path.basename(prefix)) && (f.endsWith('.mp3') || f.endsWith('.tmp') || f.endsWith('.part'))) {
+                            if (f.startsWith(producedPrefix) && /\.(mp3|tmp|part|webm|m4a|opus)$/i.test(f)) {
                                 try { fs.unlinkSync(path.join(APP_STORAGE, f)); } catch (e) {}
                             }
                         });
                     } catch (e) {}
+                    if (err.noRetry) break;
                     if (attempt < maxYtAttempts) await backoff(1500 * attempt);
+                } finally {
+                    if (cookieCopy) cookieCopy.cleanup();
                 }
             }
             if (ytLastErr) throw ytLastErr;
@@ -427,7 +427,7 @@ app.get('/api/download-progress', async (req, res) => {
         res.end();
     } catch (err) {
         console.error('Download process failed:', err && err.stack ? err.stack : err.message);
-        res.write(`data: ${JSON.stringify({ status: 'ERROR', message: err.message })}\n\n`);
+        res.write(`data: ${JSON.stringify({ status: 'ERROR', message: friendlyDownloadError(err.message) })}\n\n`);
         res.end();
         if (fs.existsSync(finalMp3Path)) {
             try { fs.unlinkSync(finalMp3Path); } catch (e) {}
@@ -559,7 +559,7 @@ app.get('/api/search', async (req, res) => {
                 flatPlaylist: true,
                 skipDownload: true,
                 noWarnings: true,
-                extractorArgs: 'youtube:player_client=android,web_safari',
+                forceIpv4: true,
             }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('YouTube search timed out')), 20000)),
         ]);
